@@ -2240,6 +2240,11 @@ static void switch_v7m_sp(CPUARMState *env, int process)
         env->v7m.other_sp = env->regs[13];
         env->regs[13] = tmp;
         env->v7m.current_sp = process;
+        if (process) {
+            env->v7m.control |= 2;
+        } else {
+            env->v7m.control &= ~2;
+        }
     }
 }
 
@@ -2249,8 +2254,13 @@ static void do_v7m_exception_exit(CPUARMState *env)
     uint32_t xpsr;
 
     type = env->regs[15];
-    if (env->v7m.exception != 0)
+    if (env->v7m.exception != 0) {
         armv7m_nvic_complete_irq(env->nvic, env->v7m.exception);
+		/* Returning from any exception except NMI clears FAULTMASK to 0 */
+        if (env->v7m.exception != 2) {
+            env->uncached_cpsr &= ~CPSR_F;
+        }
+    }
 
     /* Switch to the target stack.  */
     switch_v7m_sp(env, (type & 4) != 0);
@@ -2261,8 +2271,8 @@ static void do_v7m_exception_exit(CPUARMState *env)
     env->regs[3] = v7m_pop(env);
     env->regs[12] = v7m_pop(env);
     env->regs[14] = v7m_pop(env);
-    env->regs[15] = v7m_pop(env);
-    xpsr = v7m_pop(env);
+    env->regs[15] = v7m_pop(env) & ~1;
+	xpsr = v7m_pop(env);
     xpsr_write(env, xpsr, 0xfffffdff);
     /* Undo stack alignment.  */
     if (xpsr & 0x200)
@@ -2312,6 +2322,7 @@ void arm_v7m_cpu_do_interrupt(CPUState *cs)
     uint32_t xpsr = xpsr_read(env);
     uint32_t lr;
     uint32_t addr;
+    uint32_t tmp;
 
     arm_log_exception(env->exception_index);
 
@@ -2351,6 +2362,13 @@ void arm_v7m_cpu_do_interrupt(CPUState *cs)
         armv7m_nvic_set_pending(env->nvic, ARMV7M_EXCP_DEBUG);
         return;
     case EXCP_IRQ:
+        tmp = armv7m_nvic_get_current_pending(env->nvic);
+        if (env->v7m.basepri) {
+            int pri = armv7m_nvic_get_priority(env->nvic, tmp);
+            if (env->v7m.basepri <= pri) {
+                return;
+            }
+        }
         env->v7m.exception = armv7m_nvic_acknowledge_irq(env->nvic);
         break;
     case EXCP_EXCEPTION_EXIT:
@@ -2370,6 +2388,7 @@ void arm_v7m_cpu_do_interrupt(CPUState *cs)
     }
     /* Switch to the handler mode.  */
     v7m_push(env, xpsr);
+
     v7m_push(env, env->regs[15]);
     v7m_push(env, env->regs[14]);
     v7m_push(env, env->regs[12]);

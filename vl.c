@@ -589,6 +589,7 @@ typedef struct {
 static const RunStateTransition runstate_transitions_def[] = {
     /*     from      ->     to      */
     { RUN_STATE_DEBUG, RUN_STATE_RUNNING },
+    { RUN_STATE_DEBUG, RUN_STATE_FINISH_MIGRATE },
 
     { RUN_STATE_INMIGRATE, RUN_STATE_RUNNING },
     { RUN_STATE_INMIGRATE, RUN_STATE_PAUSED },
@@ -2005,6 +2006,9 @@ static void main_loop(void)
     int last_io = 0;
 #ifdef CONFIG_PROFILER
     int64_t ti;
+#endif
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
     do {
         nonblocking = !kvm_enabled() && !xen_enabled() && last_io > 0;
@@ -3488,11 +3492,16 @@ int main(int argc, char **argv, char **envp)
             }
             case QEMU_OPTION_acpitable:
                 opts = qemu_opts_parse(qemu_find_opts("acpi"), optarg, 1);
-                g_assert(opts != NULL);
+                if (!opts) {
+                    exit(1);
+                }
                 do_acpitable_option(opts);
                 break;
             case QEMU_OPTION_smbios:
                 opts = qemu_opts_parse(qemu_find_opts("smbios"), optarg, 0);
+                if (!opts) {
+                    exit(1);
+                }
                 do_smbios_option(opts);
                 break;
             case QEMU_OPTION_enable_kvm:

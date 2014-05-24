@@ -350,10 +350,10 @@ int cpu_exec(CPUArchState *env)
                             do_interrupt_x86_hardirq(env, EXCP12_MCHK, 0);
                             next_tb = 0;
                         } else if ((interrupt_request & CPU_INTERRUPT_HARD) &&
-                                   (((env->hflags2 & HF2_VINTR_MASK) && 
+                                   (((env->hflags2 & HF2_VINTR_MASK) &&
                                      (env->hflags2 & HF2_HIF_MASK)) ||
-                                    (!(env->hflags2 & HF2_VINTR_MASK) && 
-                                     (env->eflags & IF_MASK && 
+                                    (!(env->hflags2 & HF2_VINTR_MASK) &&
+                                     (env->eflags & IF_MASK &&
                                       !(env->hflags & HF_INHIBIT_IRQ_MASK))))) {
                             int intno;
                             cpu_svm_check_intercept_param(env, SVM_EXIT_INTR,
@@ -368,7 +368,7 @@ int cpu_exec(CPUArchState *env)
                             next_tb = 0;
 #if !defined(CONFIG_USER_ONLY)
                         } else if ((interrupt_request & CPU_INTERRUPT_VIRQ) &&
-                                   (env->eflags & IF_MASK) && 
+                                   (env->eflags & IF_MASK) &&
                                    !(env->hflags & HF_INHIBIT_IRQ_MASK)) {
                             int intno;
                             /* FIXME: this should respect TPR */
@@ -467,12 +467,19 @@ int cpu_exec(CPUArchState *env)
                        the stack if an interrupt occurred at the wrong time.
                        We avoid this by disabling interrupts when
                        pc contains a magic address.  */
-                    if (interrupt_request & CPU_INTERRUPT_HARD
-                        && ((IS_M(env) && env->regs[15] < 0xfffffff0)
-                            || !(env->uncached_cpsr & CPSR_I))) {
-                        env->exception_index = EXCP_IRQ;
-                        cc->do_interrupt(cpu);
-                        next_tb = 0;
+                    if (interrupt_request & CPU_INTERRUPT_HARD) {
+                        if (IS_M(env)) {
+                            if (env->regs[15] < 0xfffffff0
+                                && !(env->uncached_cpsr & (CPSR_I|CPSR_F))) {
+                                env->exception_index = EXCP_IRQ;
+                                cc->do_interrupt(cpu);
+                                next_tb = 0;
+                            }
+                        } else if (!(env->uncached_cpsr & CPSR_I)) {
+                            env->exception_index = EXCP_IRQ;
+                            cc->do_interrupt(cpu);
+                            next_tb = 0;
+                        }
                     }
 #elif defined(TARGET_UNICORE32)
                     if (interrupt_request & CPU_INTERRUPT_HARD

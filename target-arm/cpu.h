@@ -478,6 +478,8 @@ void arm_cpu_list(FILE *f, fprintf_function cpu_fprintf);
 void armv7m_nvic_set_pending(void *opaque, int irq);
 int armv7m_nvic_acknowledge_irq(void *opaque);
 void armv7m_nvic_complete_irq(void *opaque, int irq);
+extern int armv7m_nvic_get_priority(void *opaque, int irq);
+extern int armv7m_nvic_get_current_pending(void* opaque);
 
 /* Interface for defining coprocessor registers.
  * Registers are defined in tables of arm_cp_reginfo structs
